@@ -1,0 +1,113 @@
+using System;
+using System.Windows.Forms;
+using System.CodeDom.Compiler;
+
+namespace Newton_method
+{
+    public partial class Form1 : Form
+    {
+        public Form1()
+        {
+            InitializeComponent();
+        }
+
+        private void CalculateButton_Click(object sender, EventArgs e)
+        {
+            try
+            {
+                if (double.TryParse(aTextBox.Text, out double a) &&
+                    double.TryParse(bTextBox.Text, out double b) &&
+                    double.TryParse(eTextBox.Text, out double epsilon))
+                {
+                    string formula = formulaTextBox.Text;
+                    double minimum = FindMinimum(a, b, epsilon, formula);
+                    DisplayGraph(a, b, formula, minimum);
+                    MessageBox.Show($"Локальный минимум функции: {minimum}");
+                }
+                else
+                {
+                    MessageBox.Show("Некорректные входные данные.");
+                }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Ошибка: {ex.Message}");
+            }
+        }
+
+        private double FindMinimum(double a, double b, double epsilon, string formula)
+        {
+            double phi = (1.0 + Math.Sqrt(5.0)) / 2.0; // Золотое сечение
+            double x1 = a;
+            double x4 = b;
+
+            double x2 = x4 - (x4 - x1) / phi;
+            double x3 = x1 + (x4 - x1) / phi;
+
+            while (Math.Abs(x4 - x1) > epsilon)
+            {
+                double f2 = CalculateFunctionValue(x2, formula);
+                double f3 = CalculateFunctionValue(x3, formula);
+
+                if (f2 < f3)
+                {
+                    x4 = x3;
+                    x3 = x2;
+                    x2 = x4 - (x4 - x1) / phi;
+                }
+                else
+                {
+                    x1 = x2;
+                    x2 = x3;
+                    x3 = x1 + (x4 - x1) / phi;
+                }
+            }
+
+            return (x1 + x4) / 2;
+        }
+
+        private double CalculateFunctionValue(double x, string formula)
+        {
+            CodeDomProvider provider = CodeDomProvider.CreateProvider("CSharp");
+            CompilerParameters parameters = new CompilerParameters();
+            parameters.GenerateInMemory = true;
+
+            CompilerResults results = provider.CompileAssemblyFromSource(parameters,
+                $@"
+                using System;
+                public class FunctionEvaluator
+                {{
+                    public static double Evaluate(double x)
+                    {{
+                        return {formula};
+                    }}
+                }}");
+
+            if (results.Errors.Count == 0)
+            {
+                Type type = results.CompiledAssembly.GetType("FunctionEvaluator");
+                var method = type.GetMethod("Evaluate");
+                return (double)method.Invoke(null, new object[] { x });
+            }
+            else
+            {
+                throw new Exception("Ошибка в формуле функции.");
+            }
+        }
+
+        private void DisplayGraph(double a, double b, string formula, double minimum)
+        {
+            chart.Series.Clear();
+            Series series = new Series("Function");
+
+            for (double x = a; x <= b; x += 0.01)
+            {
+                double y = CalculateFunctionValue(x, formula);
+                series.Points.AddXY(x, y);
+            }
+
+            chart.Series.Add(series);
+            chart.Series.Add(new Series("Minimum") { Points = { new DataPoint(minimum, CalculateFunctionValue(minimum, formula)) } });
+        }
+    }
+}
